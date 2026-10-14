@@ -16,7 +16,7 @@ log.setLevel(logging.DEBUG)
 
 @app.route('/api/add/<int:a>/<int:b>', methods=['GET', 'POST'])
 def add(a, b):
-    response = {'sum': str(a + b)}
+    response = {'sum': a + b}
     response_pickled = jsonpickle.encode(response)
     return Response(
         response=response_pickled,

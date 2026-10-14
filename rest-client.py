@@ -28,16 +28,26 @@ def doRawImage(addr, debug=False):
 
 
 def doAdd(addr, debug=False):
-
     headers = {'content-type': 'application/json'}
+    a, b = 5, 10
+    expected_sum = a + b
+    add_url = f"{addr}/api/add/{a}/{b}"
 
-    # send http request with image and receive response
-    add_url = addr + "/api/add/5/10"
     response = requests.post(add_url, headers=headers)
+    response.raise_for_status()
+
+    # Decode and verify the response payload
+    data = json.loads(response.text)
+    received_sum = int(data.get('sum', -1))
+
+    assert received_sum == expected_sum, f"Expected {expected_sum}, got {received_sum}"
 
     if debug:
-        print("Response is", response)
-        print(json.loads(response.text))
+        print(f"Request: POST {add_url}")
+        print("Response code:", response.status_code)
+        print("Raw payload:  ", response.text.strip())
+        print("Decoded data: ", data)
+        print(f"Verified sum:  {a} + {b} = {received_sum}")
 
 
 def doDotProduct(addr, debug=False):
