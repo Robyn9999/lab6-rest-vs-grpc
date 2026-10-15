@@ -1,13 +1,13 @@
 
 |  Method 	| Local  	| Same-Zone  	|  Different Region 	|
 |---	|---	|---	|---	|---	|
-|   REST add	|   	|   	|  	|
+|   REST add	|   1.314	|   	|  	|
 |   gRPC add	|   	|   	|    	|
-|   REST rawimg	|   	|   	|   	|
+|   REST rawimg	|   4.58	|   	|   	|
 |   gRPC rawimg	|       |   	|   	|
-|   REST dotproduct	|   	|   	|  	|
+|   REST dotproduct	|  6.13 	|   	|  	|
 |   gRPC dotproduct	|   	|   	|    	|
-|   REST jsonimg	|   	|   	|   	|
+|   REST jsonimg	|  7.8 	|   	|   	|
 |   gRPC jsonimg	|       |   	|   	|
 |   PING        |       |      |       |
 
