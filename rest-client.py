@@ -51,11 +51,76 @@ def doAdd(addr, debug=False):
 
 
 def doDotProduct(addr, debug=False):
-    pass
+    url = f"{addr}/api/dotproduct"  # Adjust route to match your lab's spec if needed (e.g., /dotproduct)
+    
+    # Generate test vectors
+    vec_a = [1.5, 2.0, 3.5, 4.0]
+    vec_b = [2.0, 3.0, 1.0, 0.5]
+    expected_dot = sum(x * y for x, y in zip(vec_a, vec_b))  # 3.0 + 6.0 + 3.5 + 2.0 = 14.5
+
+    payload = {"a": vec_a, "b": vec_b}
+
+    start = time.perf_counter()
+    response = requests.post(url, json=payload)
+    elapsed = time.perf_counter() - start
+
+    assert response.status_code == 200, f"Expected 200 OK, got {response.status_code}: {response.text}"
+    
+    data = response.json()
+    # Support either key: 'result' or 'dot_product'
+    received_dot = data.get("result", data.get("dotproduct", data.get("dot_product")))
+
+    assert abs(received_dot - expected_dot) < 1e-6, f"Expected {expected_dot}, got {received_dot}"
+
+    if debug:
+        print(f"Request: POST {url}")
+        print("Response code:", response.status_code)
+        print("Raw payload:  ", response.text.strip())
+        print("Decoded data: ", data)
+        print(f"Verified dot product: {expected_dot} == {received_dot}")
+        print(f"Latency:      {elapsed:.6f}s ({elapsed * 1000:.3f} ms)")
+
+    return elapsed
 
 
 def doJsonImage(addr, debug=False):
-    pass
+    url = f"{addr}/api/jsonimage"  # Adjust route to match your lab's spec if needed (e.g., /jsonimage or /image)
+
+    # 1. Create a dummy test payload (raw bytes encoded as Base64 in JSON)
+    # 1024 bytes of dummy binary data (or replace with open("test.jpg", "rb").read())
+    sample_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 1000  
+    encoded_b64 = base64.b64encode(sample_bytes).decode("utf-8")
+    expected_size = len(sample_bytes)
+
+    payload = {
+        "image": encoded_b64,
+        "width": 100,
+        "height": 100
+    }
+
+    start = time.perf_counter()
+    response = requests.post(url, json=payload)
+    elapsed = time.perf_counter() - start
+
+    assert response.status_code == 200, f"Expected 200 OK, got {response.status_code}: {response.text}"
+
+    data = response.json()
+    # Typically image benchmarks verify dimensions, bytes processed, or echo size
+    received_size = data.get("size", data.get("bytes_received", data.get("length")))
+    
+    if received_size is not None:
+        assert received_size == expected_size, f"Expected size {expected_size}, got {received_size}"
+
+    if debug:
+        print(f"Request: POST {url}")
+        print("Response code:", response.status_code)
+        # Truncate raw payload in debug so giant Base64 strings don't flood the terminal
+        preview = response.text.strip()
+        print("Raw payload:  ", preview[:120] + ("..." if len(preview) > 120 else ""))
+        print("Decoded data: ", data)
+        print(f"Latency:      {elapsed:.6f}s ({elapsed * 1000:.3f} ms)")
+
+    return elapsed
 
 
 # ---------------------------------------------------------

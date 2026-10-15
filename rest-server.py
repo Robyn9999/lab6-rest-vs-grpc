@@ -115,4 +115,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Start Flask app
-    app.run(host='0.0.0.0', port=args.port, threaded=True)
+    app.run(host='0.0.0.0', port=args.port)
