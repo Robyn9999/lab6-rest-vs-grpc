@@ -2,30 +2,13 @@
 
 from __future__ import print_function
 
-import requests
-import json
+import sys
 import time
 import base64
-import jsonpickle
-import random
 import argparse
+import requests
 
-
-def doRawImage(addr, debug=False):
-
-    # prepare headers for http request
-    headers = {'content-type': 'image/png'}
-
-    img = open('Flatirons_Winter_Sunrise_edit_2.jpg', 'rb').read()
-
-    # send http request with image and receive response
-    image_url = addr + '/api/rawimage'
-    response = requests.post(image_url, data=img, headers=headers)
-
-    if debug:
-        print("Response is", response)
-        print(json.loads(response.text))
-
+IMAGE_FILE = 'Flatirons_Winter_Sunrise_edit_2.jpg'
 
 def doAdd(addr, debug=False):
     headers = {'content-type': 'application/json'}
@@ -36,187 +19,98 @@ def doAdd(addr, debug=False):
     response = requests.post(add_url, headers=headers)
     response.raise_for_status()
 
-    # Decode and verify the response payload
-    data = json.loads(response.text)
+    data = response.json()
     received_sum = int(data.get('sum', -1))
-
     assert received_sum == expected_sum, f"Expected {expected_sum}, got {received_sum}"
 
     if debug:
-        print(f"Request: POST {add_url}")
-        print("Response code:", response.status_code)
-        print("Raw payload:  ", response.text.strip())
-        print("Decoded data: ", data)
-        print(f"Verified sum:  {a} + {b} = {received_sum}")
+        print(f"Verified sum: {a} + {b} = {received_sum}")
 
 
-def doDotProduct(addr, debug=False):
-    url = f"{addr}/api/dotproduct"  # Adjust route to match your lab's spec if needed (e.g., /dotproduct)
-    
-    # Generate test vectors
-    vec_a = [1.5, 2.0, 3.5, 4.0]
-    vec_b = [2.0, 3.0, 1.0, 0.5]
-    expected_dot = sum(x * y for x, y in zip(vec_a, vec_b))  # 3.0 + 6.0 + 3.5 + 2.0 = 14.5
-
-    payload = {"a": vec_a, "b": vec_b}
-
-    start = time.perf_counter()
+def doDotProduct(addr, payload, expected_dot, debug=False):
+    url = f"{addr}/api/dotproduct"
     response = requests.post(url, json=payload)
-    elapsed = time.perf_counter() - start
+    response.raise_for_status()
 
-    assert response.status_code == 200, f"Expected 200 OK, got {response.status_code}: {response.text}"
-    
     data = response.json()
-    # Support either key: 'result' or 'dot_product'
-    received_dot = data.get("result", data.get("dotproduct", data.get("dot_product")))
-
+    received_dot = data.get("dotproduct", data.get("result", data.get("dot_product")))
     assert abs(received_dot - expected_dot) < 1e-6, f"Expected {expected_dot}, got {received_dot}"
 
     if debug:
-        print(f"Request: POST {url}")
-        print("Response code:", response.status_code)
-        print("Raw payload:  ", response.text.strip())
-        print("Decoded data: ", data)
         print(f"Verified dot product: {expected_dot} == {received_dot}")
-        print(f"Latency:      {elapsed:.6f}s ({elapsed * 1000:.3f} ms)")
-
-    return elapsed
 
 
-def doJsonImage(addr, debug=False):
-    url = f"{addr}/api/jsonimage"  # Adjust route to match your lab's spec if needed (e.g., /jsonimage or /image)
+def doRawImage(addr, raw_bytes, debug=False):
+    headers = {'content-type': 'application/octet-stream'}
+    url = f"{addr}/api/rawimage"
 
-    # 1. Create a dummy test payload (raw bytes encoded as Base64 in JSON)
-    # 1024 bytes of dummy binary data (or replace with open("test.jpg", "rb").read())
-    sample_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 1000  
-    encoded_b64 = base64.b64encode(sample_bytes).decode("utf-8")
-    expected_size = len(sample_bytes)
-
-    payload = {
-        "image": encoded_b64,
-        "width": 100,
-        "height": 100
-    }
-
-    start = time.perf_counter()
-    response = requests.post(url, json=payload)
-    elapsed = time.perf_counter() - start
-
-    assert response.status_code == 200, f"Expected 200 OK, got {response.status_code}: {response.text}"
+    response = requests.post(url, data=raw_bytes, headers=headers)
+    response.raise_for_status()
 
     data = response.json()
-    # Typically image benchmarks verify dimensions, bytes processed, or echo size
-    received_size = data.get("size", data.get("bytes_received", data.get("length")))
-    
-    if received_size is not None:
-        assert received_size == expected_size, f"Expected size {expected_size}, got {received_size}"
+    assert data.get('width', 0) > 0 and data.get('height', 0) > 0, "Invalid image dimensions received"
 
     if debug:
-        print(f"Request: POST {url}")
-        print("Response code:", response.status_code)
-        # Truncate raw payload in debug so giant Base64 strings don't flood the terminal
-        preview = response.text.strip()
-        print("Raw payload:  ", preview[:120] + ("..." if len(preview) > 120 else ""))
-        print("Decoded data: ", data)
-        print(f"Latency:      {elapsed:.6f}s ({elapsed * 1000:.3f} ms)")
+        print(f"Decoded dimensions: {data['width']}x{data['height']}")
 
-    return elapsed
+
+def doJsonImage(addr, payload, debug=False):
+    url = f"{addr}/api/jsonimage"
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+
+    data = response.json()
+    assert data.get('width', 0) > 0 and data.get('height', 0) > 0, "Invalid image dimensions received"
+
+    if debug:
+        print(f"Decoded dimensions: {data['width']}x{data['height']}")
 
 
 # ---------------------------------------------------------
-# Parse command-line arguments
+# CLI Arguments & Setup
 # ---------------------------------------------------------
-
-parser = argparse.ArgumentParser(
-    description='REST client for measuring server operations'
-)
-
-parser.add_argument(
-    'host',
-    help='IP address or hostname of the REST server'
-)
-
-parser.add_argument(
-    'cmd',
-    choices=['add', 'rawImage', 'dotProduct', 'jsonImage'],
-    help='Operation to perform'
-)
-
-parser.add_argument(
-    'reps',
-    type=int,
-    help='Number of repetitions for measurement'
-)
-
-parser.add_argument(
-    '-p', '--port',
-    type=int,
-    default=5000,
-    help='Server port (default: 5000)'
-)
-
-parser.add_argument(
-    '-d', '--debug',
-    action='store_true',
-    help='Print the response from the server'
-)
+parser = argparse.ArgumentParser(description='REST client for measuring server operations')
+parser.add_argument('host', help='IP address or hostname of the REST server')
+parser.add_argument('cmd', choices=['add', 'rawImage', 'dotProduct', 'jsonImage'], help='Operation to perform')
+parser.add_argument('reps', type=int, help='Number of repetitions for measurement')
+parser.add_argument('-p', '--port', type=int, default=5000, help='Server port (default: 5000)')
+parser.add_argument('-d', '--debug', action='store_true', help='Print the response from the server')
 
 args = parser.parse_args()
-
-
-# ---------------------------------------------------------
-# Build server address
-# ---------------------------------------------------------
-
 addr = f"http://{args.host}:{args.port}"
 
-print(f"Running {args.reps} reps against {addr}")
+print(f"Running {args.reps} reps of '{args.cmd}' against {addr}")
 
-
-# ---------------------------------------------------------
-# Perform requested operation
-# ---------------------------------------------------------
-
-if args.cmd == 'rawImage':
-
-    start = time.perf_counter()
-
-    for x in range(args.reps):
-        doRawImage(addr, debug=args.debug)
-
-    delta = ((time.perf_counter() - start) / args.reps) * 1000
-    print("Took", delta, "ms per operation")
-
-
-elif args.cmd == 'add':
-
-    start = time.perf_counter()
-
-    for x in range(args.reps):
-        doAdd(addr, debug=args.debug)
-
-    delta = ((time.perf_counter() - start) / args.reps) * 1000
-    print("Took", delta, "ms per operation")
-
-
-elif args.cmd == 'jsonImage':
-
-    start = time.perf_counter()
-
-    for x in range(args.reps):
-        doJsonImage(addr, debug=args.debug)
-
-    delta = ((time.perf_counter() - start) / args.reps) * 1000
-    print("Took", delta, "ms per operation")
-
+# Pre-generate payloads so disk I/O and base64 encoding aren't measured in the loop
+if args.cmd == 'add':
+    bench_call = lambda: doAdd(addr, debug=args.debug)
 
 elif args.cmd == 'dotProduct':
+    vec_a = [1.5 * i for i in range(100)]
+    vec_b = [0.5 * i for i in range(100)]
+    expected_dot = sum(x * y for x, y in zip(vec_a, vec_b))
+    payload = {"a": vec_a, "b": vec_b}
+    bench_call = lambda: doDotProduct(addr, payload, expected_dot, debug=args.debug)
 
-    start = time.perf_counter()
+elif args.cmd == 'rawImage':
+    with open(IMAGE_FILE, 'rb') as f:
+        raw_bytes = f.read()
+    bench_call = lambda: doRawImage(addr, raw_bytes, debug=args.debug)
 
-    for x in range(args.reps):
-        doDotProduct(addr, debug=args.debug)
+elif args.cmd == 'jsonImage':
+    with open(IMAGE_FILE, 'rb') as f:
+        encoded_b64 = base64.b64encode(f.read()).decode('utf-8')
+    payload = {"img": encoded_b64}
+    bench_call = lambda: doJsonImage(addr, payload, debug=args.debug)
 
-    delta = ((time.perf_counter() - start) / args.reps) * 1000
-    print("Took", delta, "ms per operation")
+# Warm-up call
+bench_call()
 
+# Benchmark loop
+start = time.perf_counter()
+for _ in range(args.reps):
+    bench_call()
+delta = ((time.perf_counter() - start) / args.reps) * 1000
+
+print(f"Took {delta:.4f} ms per operation")
